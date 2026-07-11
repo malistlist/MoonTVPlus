@@ -11,8 +11,18 @@
  * 注意：此模块仅在服务端使用，通过 webpack 配置排除客户端打包
  */
 
-import { createClient, type Client } from '@libsql/client';
 import { DatabaseAdapter, D1PreparedStatement, D1Result } from './d1-adapter';
+
+/**
+ * 动态加载 @libsql/client 的 createClient 函数
+ *
+ * 使用 require 而非 import，避免 webpack 在 EdgeOne 构建中
+ * 因条件导出 (edge-light) 错误解析 ESM 模块
+ */
+function getLibsqlClient(): any {
+  const mod = require('@libsql/client');
+  return mod.createClient || mod.default?.createClient;
+}
 
 /**
  * Turso 适配器
@@ -20,9 +30,10 @@ import { DatabaseAdapter, D1PreparedStatement, D1Result } from './d1-adapter';
  * 使用 @libsql/client 包装为 D1 兼容接口
  */
 export class TursoAdapter implements DatabaseAdapter {
-  private client: Client;
+  private client: any;
 
   constructor(url: string, authToken: string) {
+    const createClient = getLibsqlClient();
     this.client = createClient({
       url,
       authToken,
@@ -39,7 +50,7 @@ export class TursoAdapter implements DatabaseAdapter {
       (stmt) => (stmt as TursoPreparedStatement).toLibSQLBatch()
     );
     const results = await this.client.batch(libsqlStatements, 'write');
-    return results.map((result) => ({
+    return results.map((result: any) => ({
       success: true,
       results: result.rows || [],
       meta: {
@@ -65,7 +76,7 @@ class TursoPreparedStatement implements D1PreparedStatement {
   private params: any[] = [];
 
   constructor(
-    private client: Client,
+    private client: any,
     private query: string
   ) {}
 
